@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-import psycopg2
+import pg8000
 import os
 from urllib.parse import urlparse
 
@@ -10,7 +10,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
     url = urlparse(DATABASE_URL)
-    conn = psycopg2.connect(
+    conn = pg8000.connect(
         database=url.path[1:],
         user=url.username,
         password=url.password,
@@ -32,11 +32,9 @@ if conn:
         """)
     conn.commit()
 
-
 @app.route('/')
 def hello():
     return "Hello, Serverless! 🚀\n", 200, {'Content-Type': 'text/plain'}
-
 
 @app.route('/echo', methods=['POST'])
 def echo():
@@ -47,35 +45,31 @@ def echo():
         "length": len(str(data)) if data else 0
     })
 
-
-# НОВЫЕ ЭНДПОИНТЫ ДЛЯ БАЗЫ ДАННЫХ
 @app.route('/save', methods=['POST'])
 def save_message():
     if not conn:
         return jsonify({"error": "DB not connected"}), 500
-
+    
     data = request.get_json()
     message = data.get('message', '') if data else ''
-
+    
     with conn.cursor() as cur:
         cur.execute("INSERT INTO messages (content) VALUES (%s)", (message,))
     conn.commit()
-
+    
     return jsonify({"status": "saved", "message": message})
-
 
 @app.route('/messages')
 def get_messages():
     if not conn:
         return jsonify({"error": "DB not connected"}), 500
-
+    
     with conn.cursor() as cur:
         cur.execute("SELECT id, content, created_at FROM messages ORDER BY id DESC LIMIT 10")
         rows = cur.fetchall()
-
+    
     messages = [{"id": r[0], "text": r[1], "time": r[2].isoformat()} for r in rows]
     return jsonify(messages)
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
